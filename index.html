@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POS Benchmarking — HoReCa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- SheetJS: reads the .xlsx file directly in the browser. Free, no license cost. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#171A21; --ink-soft:#4B505B;
+    --bg:#F3F4F2; --surface:#FFFFFF;
+    --border:#E1E3E0; --border-strong:#C9CCC7; --border-heavy:#B7BBB5;
+    --teal:#0F6E5E; --teal-tint:#E7F2EF;
+    --green:#1B8A5A; --red:#C94A3D;
+    --amber:#B4791F; --amber-tint:#FBF1E1;
+    --grey:#8B9096; --grey-tint:#EEEFED;
+    --col-even:#FAFAF9;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding:36px 28px 80px;}
+  .wrap{max-width:1280px;margin:0 auto;}
+
+  .eyebrow{display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:600;margin-bottom:12px;}
+  .eyebrow::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--teal);display:inline-block;}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(24px,3.6vw,34px);line-height:1.08;margin:0 0 10px;letter-spacing:-0.01em;}
+  .subtitle{color:var(--ink-soft);font-size:14.5px;line-height:1.55;max-width:680px;margin:0 0 22px;}
+
+  .banner{
+    background:var(--amber-tint);border:1px solid #E9CE9E;color:#8A5A16;
+    border-radius:10px;padding:11px 16px;font-size:13px;margin-bottom:20px;
+    display:none;
+  }
+  .banner.show{display:block;}
+
+  /* ---- Filter panel ---- */
+  .filters{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 22px 20px;margin-bottom:22px;}
+  .filter-row{padding:12px 0;border-bottom:1px solid var(--border);}
+  .filter-row:last-child{border-bottom:none;padding-bottom:0;}
+  .filter-row:first-child{padding-top:0;}
+  .filter-label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:600;margin-bottom:10px;}
+  select#countrySelect{
+    font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:var(--ink);
+    padding:9px 14px;border-radius:9px;border:1px solid var(--border-strong);background:var(--surface);
+    min-width:220px;cursor:pointer;
+  }
+  .chip-row{display:flex;flex-wrap:wrap;gap:9px;}
+  .picker-chip{
+    display:flex;align-items:center;gap:8px;border:1px solid var(--border-strong);border-radius:20px;
+    padding:7px 14px 7px 10px;font-size:13px;font-weight:500;color:var(--ink-soft);
+    cursor:pointer;user-select:none;background:var(--surface);
+  }
+  .picker-chip input{accent-color:var(--teal);width:14px;height:14px;cursor:pointer;}
+  .picker-chip.active{background:var(--teal-tint);border-color:var(--teal);color:var(--teal);font-weight:600;}
+  .picker-chip .sub{opacity:.7;font-weight:400;}
+
+  /* ---- Legend ---- */
+  .legend{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 22px;margin-bottom:22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:11px 18px;}
+  .legend-title{grid-column:1/-1;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:600;}
+  .legend-item{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ink-soft);}
+  .legend-item strong{color:var(--ink);font-weight:600;display:block;font-size:12px;}
+  .swatch{flex:0 0 auto;margin-top:1px;}
+  .icon{width:16px;height:16px;display:block;}
+  .chip{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:20px;white-space:nowrap;display:inline-block;}
+  .chip.addon{background:var(--teal-tint);color:var(--teal);border:1px solid #BFDED6;}
+  .chip.supported{background:var(--surface);color:var(--ink-soft);border:1px dashed var(--border-strong);font-style:italic;font-weight:500;}
+  .chip.na{background:var(--grey-tint);color:var(--grey);border:1px solid #DCDEDB;font-weight:500;}
+  .chip.star{background:var(--amber-tint);color:var(--amber);border:1px solid #E9CE9E;}
+
+  /* ---- Table ---- */
+  .table-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+  .table-scroll{overflow-x:auto;}
+  table{border-collapse:separate;border-spacing:0;width:100%;min-width:640px;}
+
+  .col-group{position:sticky;left:0;z-index:3;background:var(--grey-tint);min-width:148px;max-width:148px;border-right:1px solid var(--border);vertical-align:middle;}
+  .col-sub{position:sticky;left:148px;z-index:3;background:var(--surface);min-width:210px;max-width:210px;border-right:2px solid var(--border-heavy);}
+  thead .col-group, thead .col-sub{z-index:4;}
+
+  thead th{position:sticky;top:0;z-index:2;background:var(--surface);text-align:left;padding:0;border-bottom:1px solid var(--border-strong);}
+  .pkg-head{padding:14px 18px;min-width:150px;}
+  .pkg-head .bar{height:4px;width:100%;border-radius:3px;margin-bottom:10px;}
+  .pkg-head .competitor{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);font-weight:600;margin-bottom:3px;}
+  .pkg-head .package{font-weight:700;font-size:14.5px;color:var(--ink);}
+
+  tbody td{padding:12px 18px;font-size:13.5px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+
+  td.col-group{font-weight:700;color:var(--ink);font-size:12.5px;letter-spacing:.01em;}
+  td.col-sub{font-weight:500;color:var(--ink-soft);font-size:13.5px;background:var(--surface);}
+  td.col-sub.leaf{color:var(--grey);font-style:italic;}
+
+  /* Major divider between the "Package" part and the "Feature" part */
+  tr.part-row td{background:var(--ink);color:#fff;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;padding:11px 18px;}
+  tr.part-row td.col-group, tr.part-row td.col-sub, tr.part-row td.pkg-col{background:var(--ink);}
+  tr.part-row:not(:first-child) td{border-top:3px solid var(--bg);}
+
+  td.pkg-col, th.pkg-head{border-right:2px solid var(--border-heavy);}
+  td.pkg-col.even, th.pkg-head.even{background:var(--col-even);}
+
+  .price-main{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14.5px;}
+  .price-sub{display:block;font-family:'Inter',sans-serif;font-weight:400;font-size:11px;color:var(--grey);margin-top:3px;}
+  .term-note{display:block;font-family:'Inter',sans-serif;font-weight:400;font-size:11px;color:var(--grey);margin-top:2px;}
+  .billing{font-family:'Inter',sans-serif;font-weight:500;font-size:12px;color:var(--ink-soft);}
+
+  .foot-note{margin-top:20px;display:flex;gap:10px;align-items:flex-start;font-size:12px;color:var(--grey);line-height:1.5;}
+  .foot-note svg{flex:0 0 auto;margin-top:2px;}
+
+  @media (max-width:640px){ body{padding:22px 14px 60px;} .legend{grid-template-columns:1fr 1fr;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Internal tool — POS benchmark</div>
+  <h1>POS Feature &amp; Pricing Benchmark</h1>
+  <p class="subtitle">Pick a country, then the competitors you want, then the specific packages to line up. Each selected package becomes one column. Rows are split into <strong>Package</strong> (cost) and <strong>Feature</strong> (capability), with each feature's sub-items grouped beneath it.</p>
+
+  <div class="banner" id="dataBanner">Showing sample placeholder data — add your <code>data.xlsx</code> file next to this page on GitHub to see your real data.</div>
+
+  <div class="filters">
+    <div class="filter-row">
+      <div class="filter-label">Country</div>
+      <select id="countrySelect"></select>
+    </div>
+    <div class="filter-row">
+      <div class="filter-label">Competitors</div>
+      <div class="chip-row" id="competitorChips"></div>
+    </div>
+    <div class="filter-row">
+      <div class="filter-label">Packages (one column each)</div>
+      <div class="chip-row" id="packageChips"></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-title">How to read a cell</div>
+    <div class="legend-item"><span class="swatch" id="legendCheck"></span><span><strong>Included</strong>Part of this package.</span></div>
+    <div class="legend-item"><span class="swatch" id="legendX"></span><span><strong>Not available</strong>No such offering.</span></div>
+    <div class="legend-item"><span class="swatch"><span class="chip star">Included*</span></span><span><strong>Included, limited</strong>Present but not user-friendly.</span></div>
+    <div class="legend-item"><span class="swatch"><span class="chip addon">12.90 € / month</span></span><span><strong>Paid add-on</strong>Extra cost to enable.</span></div>
+    <div class="legend-item"><span class="swatch"><span class="chip supported">supported</span></span><span><strong>Supported</strong>Confirmed, tier unclear.</span></div>
+    <div class="legend-item"><span class="swatch"><span class="chip na">n/a</span></span><span><strong>No info found</strong>Not yet researched.</span></div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-scroll">
+      <table id="benchTable"></table>
+    </div>
+  </div>
+
+  <div class="foot-note">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" stroke="#8B9096" stroke-width="1.3"/><path d="M8 7.2V11.5" stroke="#8B9096" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="4.9" r="0.9" fill="#8B9096"/></svg>
+    <span>TCO (1st year) = first-year total cost of ownership. Hardware/installation cost is shown separately in grey when known. Comments, sources and last-updated dates from the sheet are kept in the data but not shown in this view.</span>
+  </div>
+
+</div>
+
+<script>
+/* =========================================================================
+   DATA LOADING
+   Expects an Excel file named "data.xlsx" in the SAME folder as this page,
+   first sheet, row 1 = header (ignored), and columns in this exact order:
+   A Competitor | B Country | C Product category | D Package
+   E Features/Cost Components | F Sub-feature | G Offering Type
+   H Term | I Billing Period | J Price | K Comments | L Last Updated
+   M Source | N Link
+   ========================================================================= */
+const COLS = ['competitor','country','category','package','featureCost','subfeature',
+              'offeringType','term','billing','price','comments','lastUpdated','source','link'];
+
+const SAMPLE_DATA = [
+  // --- DISH / Germany / Starter ---
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'First Year Cost',subfeature:'',offeringType:'Package',term:'n/a',billing:'one-time',price:'149.00'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'First Year Cost',subfeature:'Hardware + Installation',offeringType:'Package',term:'n/a',billing:'one-time',price:'60.00'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Subscription Fee',subfeature:'',offeringType:'Package',term:'12 months',billing:'month',price:'39.00'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'Integrated card payment',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'Split & partial payments',offeringType:'Feature',term:'',billing:'',price:'Supported'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'QR self-pay at table',offeringType:'Feature',term:'',billing:'month',price:'Add-on: 12,90€'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Reservation & Waitlist',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Not Available'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Loyalty Program',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Included*'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Reporting',subfeature:'Export to Excel',offeringType:'Feature',term:'',billing:'',price:'n/a'},
+
+  // --- Gastrofix / Germany / Starter ---
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'First Year Cost',subfeature:'',offeringType:'Package',term:'n/a',billing:'one-time',price:'99.00'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Subscription Fee',subfeature:'',offeringType:'Package',term:'n/a',billing:'month',price:'45.00'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'Integrated card payment',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'Split & partial payments',offeringType:'Feature',term:'',billing:'',price:'Included*'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'QR self-pay at table',offeringType:'Feature',term:'',billing:'',price:'Add-on'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Reservation & Waitlist',subfeature:'',offeringType:'Feature',term:'',billing:'one-time',price:'Add-on: min. 14,50€'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Loyalty Program',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Not Available'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Reporting',subfeature:'Export to Excel',offeringType:'Feature',term:'',billing:'',price:'Supported'},
+
+  // --- Lightspeed / Austria / Pro ---
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'First Year Cost',subfeature:'',offeringType:'Package',term:'n/a',billing:'one-time',price:'199.00'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'First Year Cost',subfeature:'Hardware + Installation',offeringType:'Package',term:'n/a',billing:'one-time',price:'120.00'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Subscription Fee',subfeature:'',offeringType:'Package',term:'24 months',billing:'year',price:'690.00'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Payments',subfeature:'Integrated card payment',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Payments',subfeature:'Split & partial payments',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Payments',subfeature:'QR self-pay at table',offeringType:'Feature',term:'',billing:'',price:'Not Available'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Reservation & Waitlist',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Loyalty Program',subfeature:'',offeringType:'Feature',term:'',billing:'month',price:'Add-on: from 24,00€'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Reporting',subfeature:'Export to Excel',offeringType:'Feature',term:'',billing:'',price:'n/a'},
+];
+
+let DATA = [];
+
+async function loadData(){
+  try{
+    const res = await fetch('data.xlsx');
+    if(!res.ok) throw new Error('no file');
+    const buf = await res.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, {header:1});
+    DATA = rows.slice(1) // skip header row
+      .filter(r => r && r.length && r[0])
+      .map(r => {
+        const o = {};
+        COLS.forEach((key, i) => { o[key] = (r[i] !== undefined && r[i] !== null) ? String(r[i]).trim() : ''; });
+        return o;
+      });
+    if(DATA.length === 0) throw new Error('empty');
+  }catch(e){
+    DATA = SAMPLE_DATA;
+    document.getElementById('dataBanner').classList.add('show');
+  }
+  init();
+}
+
+/* ========================= ICONS ========================= */
+const ICON_CHECK = `<svg class="icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="10" cy="10" r="10" fill="#1B8A5A"/>
+  <path d="M6 10.3L8.7 13L14 7.3" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+const ICON_X = `<svg class="icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="10" cy="10" r="10" fill="#C94A3D"/>
+  <path d="M7 7L13 13M13 7L7 13" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+</svg>`;
+
+/* ========================= HELPERS ========================= */
+function parseNumber(str){
+  if(!str) return null;
+  let s = String(str).replace(/[^\d.,-]/g,'');
+  if(s.includes(',') && s.includes('.')){ s = s.replace(/,/g,''); }
+  else if(s.includes(',')){ s = s.replace(',','.'); }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+function formatEuro(str){
+  const n = parseNumber(str);
+  return n === null ? null : '€ ' + n.toFixed(2);
+}
+function billingLabel(billing){
+  if(!billing) return '';
+  const b = billing.toLowerCase();
+  if(b.includes('one')) return '(one-time)';
+  if(b.includes('month')) return '/ month';
+  if(b.includes('year')) return '/ year';
+  return '/ ' + billing;
+}
+function termNote(term){
+  if(!term || term.toLowerCase() === 'n/a') return '';
+  return term;
+}
+
+function extractAddonAmount(raw){
+  // Strip the "Add-on:" prefix first so its hyphen never reaches the number parser
+  let rest = raw.replace(/^add-on:?\s*/i, '').trim();
+  let prefix = '';
+  const prefixMatch = rest.match(/^(from|min\.|max\.)\s*/i);
+  if(prefixMatch){
+    prefix = prefixMatch[1].charAt(0).toUpperCase() + prefixMatch[1].slice(1) + ' ';
+    rest = rest.slice(prefixMatch[0].length);
+  }
+  const numMatch = rest.match(/(\d+(?:[.,]\d+)?)/);
+  if(!numMatch) return {prefix, amount:null};
+  const n = parseFloat(numMatch[1].replace(',', '.'));
+  return {prefix, amount: isNaN(n) ? null : '€ ' + n.toFixed(2)};
+}
+
+function renderStatus(row){
+  if(!row || !row.price) return `<span class="chip na">n/a</span>`;
+  const raw = row.price.trim();
+  const lower = raw.toLowerCase();
+  if(lower === 'included') return ICON_CHECK;
+  if(lower === 'included*') return `<span class="chip star">Included*</span>`;
+  if(lower === 'not available') return ICON_X;
+  if(lower === 'supported') return `<span class="chip supported">supported</span>`;
+  if(lower === 'n/a' || raw === '') return `<span class="chip na">n/a</span>`;
+  if(lower.startsWith('add-on')){
+    const {prefix, amount} = extractAddonAmount(raw);
+    if(amount === null) return `<span class="chip addon">Add-on</span>`;
+    const suffix = billingLabel(row.billing);
+    return `<span class="chip addon">${prefix}${amount} ${suffix}</span>`;
+  }
+  return `<span class="chip na">${raw}</span>`;
+}
+
+/* ========================= STATE ========================= */
+let selectedCountry = null;
+let selectedCompetitors = new Set();
+let selectedPackages = new Set(); // keys: "competitor||package"
+
+function uniq(arr){ return [...new Set(arr)]; }
+
+function countriesList(){ return uniq(DATA.map(r=>r.country)).filter(Boolean); }
+function competitorsInCountry(country){ return uniq(DATA.filter(r=>r.country===country).map(r=>r.competitor)).filter(Boolean); }
+function packagesFor(country, competitor){ return uniq(DATA.filter(r=>r.country===country && r.competitor===competitor).map(r=>r.package)).filter(Boolean); }
+
+/* ========================= RENDER: FILTERS ========================= */
+function renderCountrySelect(){
+  const sel = document.getElementById('countrySelect');
+  const countries = countriesList();
+  sel.innerHTML = countries.map(c => `<option value="${c}">${c}</option>`).join('');
+  if(!selectedCountry || !countries.includes(selectedCountry)) selectedCountry = countries[0];
+  sel.value = selectedCountry;
+  sel.onchange = () => {
+    selectedCountry = sel.value;
+    selectedCompetitors = new Set(competitorsInCountry(selectedCountry));
+    rebuildPackageSelectionFromCompetitors();
+    renderCompetitorChips();
+    renderPackageChips();
+    renderTable();
+  };
+}
+
+function rebuildPackageSelectionFromCompetitors(){
+  const pkgs = new Set();
+  selectedCompetitors.forEach(comp => {
+    packagesFor(selectedCountry, comp).forEach(p => pkgs.add(comp + '||' + p));
+  });
+  selectedPackages = pkgs;
+}
+
+function renderCompetitorChips(){
+  const el = document.getElementById('competitorChips');
+  const competitors = competitorsInCountry(selectedCountry);
+  el.innerHTML = competitors.map(c => {
+    const active = selectedCompetitors.has(c);
+    return `<label class="picker-chip${active?' active':''}" data-c="${c}">
+      <input type="checkbox" ${active?'checked':''} data-c="${c}"> ${c}
+    </label>`;
+  }).join('');
+  el.querySelectorAll('input[type="checkbox"]').forEach(inp=>{
+    inp.addEventListener('change', e=>{
+      const c = e.target.getAttribute('data-c');
+      if(e.target.checked) selectedCompetitors.add(c); else selectedCompetitors.delete(c);
+      // keep package selections in sync
+      packagesFor(selectedCountry, c).forEach(p=>{
+        const key = c + '||' + p;
+        if(e.target.checked) selectedPackages.add(key); else selectedPackages.delete(key);
+      });
+      renderCompetitorChips();
+      renderPackageChips();
+      renderTable();
+    });
+  });
+}
+
+function renderPackageChips(){
+  const el = document.getElementById('packageChips');
+  let html = '';
+  competitorsInCountry(selectedCountry).forEach(c=>{
+    if(!selectedCompetitors.has(c)) return;
+    packagesFor(selectedCountry, c).forEach(p=>{
+      const key = c + '||' + p;
+      const active = selectedPackages.has(key);
+      html += `<label class="picker-chip${active?' active':''}" data-k="${key}">
+        <input type="checkbox" ${active?'checked':''} data-k="${key}"> <span class="sub">${c} ·</span> ${p}
+      </label>`;
+    });
+  });
+  el.innerHTML = html || `<span style="font-size:13px;color:var(--grey);">Select a competitor above first.</span>`;
+  el.querySelectorAll('input[type="checkbox"]').forEach(inp=>{
+    inp.addEventListener('change', e=>{
+      const key = e.target.getAttribute('data-k');
+      if(e.target.checked) selectedPackages.add(key); else selectedPackages.delete(key);
+      renderPackageChips();
+      renderTable();
+    });
+  });
+}
+
+/* ========================= RENDER: TABLE ========================= */
+const PALETTE = ['#B4791F','#6E4FA3','#2D6CA3','#A3444F','#3C8C55','#946E1F'];
+function colorForCompetitor(name, colorMap){
+  if(name.trim().toLowerCase() === 'dish') return '#0F6E5E';
+  if(!colorMap.has(name)) colorMap.set(name, PALETTE[colorMap.size % PALETTE.length]);
+  return colorMap.get(name);
+}
+
+function renderTable(){
+  const table = document.getElementById('benchTable');
+  const cols = [...selectedPackages].map(k=>{
+    const [competitor, pkg] = k.split('||');
+    return {key:k, competitor, pkg};
+  });
+
+  if(cols.length === 0){
+    table.innerHTML = `<tbody><tr><td style="padding:30px;color:var(--grey);font-size:13.5px;">Select at least one package above to see the comparison.</td></tr></tbody>`;
+    return;
+  }
+
+  const colorMap = new Map();
+
+  // ---- header ----
+  let thead = `<thead><tr><th class="corner col-group"></th><th class="corner col-sub"></th>`;
+  cols.forEach((c,i)=>{
+    const color = colorForCompetitor(c.competitor, colorMap);
+    thead += `<th class="pkg-head${i%2?' even':''}">
+      <div class="bar" style="background:${color}"></div>
+      <div class="competitor">${c.competitor}</div>
+      <div class="package">${c.pkg}</div>
+    </th>`;
+  });
+  thead += `</tr></thead>`;
+
+  // ---- rows data per column ----
+  const rowsByCol = cols.map(c => DATA.filter(r => r.country===selectedCountry && r.competitor===c.competitor && r.package===c.pkg));
+  const emptyPkgCells = () => cols.map((c,i)=>`<td class="pkg-col${i%2?' even':''}"></td>`).join('');
+
+  let body = `<tbody>`;
+
+  /* ---------------- PART 1: PACKAGE ---------------- */
+  body += `<tr class="part-row"><td colspan="2" class="col-group">Package</td>${emptyPkgCells()}</tr>`;
+
+  body += `<tr><td class="col-group" rowspan="2">Cost</td><td class="col-sub">TCO (1st year)</td>`;
+  rowsByCol.forEach((rows,i)=>{
+    const tco = rows.find(r=>r.offeringType==='Package' && r.featureCost==='First Year Cost' && !r.subfeature);
+    const hw = rows.find(r=>r.offeringType==='Package' && r.featureCost==='First Year Cost' && r.subfeature==='Hardware + Installation');
+    const main = tco ? formatEuro(tco.price) : null;
+    body += `<td class="pkg-col${i%2?' even':''}">`;
+    body += main ? `<span class="price-main">${main}</span>` : `<span class="chip na">n/a</span>`;
+    if(hw && formatEuro(hw.price)) body += `<span class="price-sub">(${formatEuro(hw.price)}, one-time)</span>`;
+    body += `</td>`;
+  });
+  body += `</tr>`;
+
+  body += `<tr><td class="col-sub">Subscription fee</td>`;
+  rowsByCol.forEach((rows,i)=>{
+    const sub = rows.find(r=>r.offeringType==='Package' && r.featureCost==='Subscription Fee');
+    body += `<td class="pkg-col${i%2?' even':''}">`;
+    if(sub && formatEuro(sub.price)){
+      body += `<span class="price-main">${formatEuro(sub.price)}</span> <span class="billing">${billingLabel(sub.billing)}</span>`;
+      const t = termNote(sub.term);
+      if(t) body += `<span class="term-note">${t} term</span>`;
+    } else {
+      body += `<span class="chip na">n/a</span>`;
+    }
+    body += `</td>`;
+  });
+  body += `</tr>`;
+
+  /* ---------------- PART 2: FEATURE ---------------- */
+  body += `<tr class="part-row"><td colspan="2" class="col-group">Feature</td>${emptyPkgCells()}</tr>`;
+
+  // group by E (feature name) in first-seen order across all selected columns, with F as the sub-feature child
+  const groupOrder = [];
+  const groupChildren = new Map(); // group -> ordered list of subfeature labels ('' allowed)
+  rowsByCol.flat().forEach(r=>{
+    if(r.offeringType !== 'Feature') return;
+    const g = r.featureCost;
+    if(!groupChildren.has(g)){ groupChildren.set(g, []); groupOrder.push(g); }
+    const children = groupChildren.get(g);
+    if(!children.includes(r.subfeature)) children.push(r.subfeature);
+  });
+
+  groupOrder.forEach(g=>{
+    const children = groupChildren.get(g);
+    const isStandalone = children.length === 1 && children[0] === '';
+
+    if(isStandalone){
+      body += `<tr><td class="col-group">${g}</td><td class="col-sub leaf">—</td>`;
+      rowsByCol.forEach((rows,i)=>{
+        const row = rows.find(r=> r.offeringType==='Feature' && r.featureCost===g && (r.subfeature||'')==='');
+        body += `<td class="pkg-col${i%2?' even':''}">${renderStatus(row)}</td>`;
+      });
+      body += `</tr>`;
+    } else {
+      children.forEach((sub,idx)=>{
+        body += `<tr>`;
+        if(idx===0) body += `<td class="col-group" rowspan="${children.length}">${g}</td>`;
+        body += `<td class="col-sub">${sub || g}</td>`;
+        rowsByCol.forEach((rows,i)=>{
+          const row = rows.find(r=> r.offeringType==='Feature' && r.featureCost===g && (r.subfeature||'')===sub);
+          body += `<td class="pkg-col${i%2?' even':''}">${renderStatus(row)}</td>`;
+        });
+        body += `</tr>`;
+      });
+    }
+  });
+
+  body += `</tbody>`;
+  table.innerHTML = thead + body;
+}
+
+/* ========================= INIT ========================= */
+function init(){
+  document.getElementById('legendCheck').innerHTML = ICON_CHECK;
+  document.getElementById('legendX').innerHTML = ICON_X;
+  const countries = countriesList();
+  selectedCountry = countries[0];
+  selectedCompetitors = new Set(competitorsInCountry(selectedCountry));
+  rebuildPackageSelectionFromCompetitors();
+  renderCountrySelect();
+  renderCompetitorChips();
+  renderPackageChips();
+  renderTable();
+}
+
+loadData();
+</script>
+</body>
+</html>
