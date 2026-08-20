@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POS Benchmarking — HoReCa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- SheetJS: reads the .xlsx file directly in the browser. Free, no license cost. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#171A21; --ink-soft:#4B505B;
+    --bg:#F3F4F2; --surface:#FFFFFF;
+    --border:#E1E3E0; --border-strong:#C9CCC7; --border-heavy:#B7BBB5;
+    --teal:#0F6E5E; --teal-tint:#E7F2EF;
+    --green:#1B8A5A; --green-tint:#E7F5EE; --red:#C94A3D;
+    --amber:#B4791F; --amber-tint:#FBF1E1;
+    --grey:#8B9096; --grey-tint:#EEEFED;
+    --col-even:#FAFAF9;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding:36px 28px 80px;}
+  .wrap{max-width:1280px;margin:0 auto;}
+
+  .eyebrow{display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:600;margin-bottom:12px;}
+  .eyebrow::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--teal);display:inline-block;}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(24px,3.6vw,34px);line-height:1.08;margin:0 0 10px;letter-spacing:-0.01em;}
+  .subtitle{color:var(--ink-soft);font-size:14.5px;line-height:1.55;max-width:680px;margin:0 0 22px;}
+
+  .banner{
+    background:var(--amber-tint);border:1px solid #E9CE9E;color:#8A5A16;
+    border-radius:10px;padding:11px 16px;font-size:13px;margin-bottom:20px;
+    display:none;
+  }
+  .banner.show{display:block;}
+
+  /* ---- Filter panel ---- */
+  .filters{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 22px 20px;margin-bottom:22px;}
+  .filter-row{padding:12px 0;border-bottom:1px solid var(--border);}
+  .filter-row:last-child{border-bottom:none;padding-bottom:0;}
+  .filter-row:first-child{padding-top:0;}
+  .filter-label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:600;margin-bottom:10px;}
+  select#countrySelect{
+    font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:var(--ink);
+    padding:9px 14px;border-radius:9px;border:1px solid var(--border-strong);background:var(--surface);
+    min-width:220px;cursor:pointer;
+  }
+  .ms-dropdown{position:relative;display:inline-block;}
+  .ms-trigger{
+    font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:var(--ink);
+    padding:9px 14px;border-radius:9px;border:1px solid var(--border-strong);background:var(--surface);
+    min-width:260px;max-width:420px;text-align:left;cursor:pointer;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .ms-trigger:hover{border-color:var(--teal);}
+  .ms-panel{
+    display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:20;
+    min-width:280px;max-width:360px;max-height:280px;overflow-y:auto;
+    background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;
+    box-shadow:0 10px 28px rgba(20,20,20,.10);padding:8px;
+  }
+  .ms-panel.open{display:block;}
+  .ms-option{
+    display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:7px;
+    cursor:pointer;font-size:13.5px;color:var(--ink-soft);user-select:none;
+  }
+  .ms-option:hover{background:var(--bg);}
+  .ms-option input{accent-color:var(--teal);width:14px;height:14px;cursor:pointer;flex:0 0 auto;}
+  .ms-option.active{color:var(--ink);font-weight:600;}
+  .chip-row{display:flex;flex-wrap:wrap;gap:9px;}
+  .modular-sub-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);font-weight:600;margin:8px 0 6px;}
+
+  /* Per-competitor package dropdowns sit in one wrapping row */
+  #packageSelectionArea{display:flex;flex-wrap:wrap;gap:10px;}
+  .pkg-trigger{min-width:0;width:auto;max-width:none;padding:8px 12px;font-size:13px;}
+  .picker-chip{
+    display:flex;align-items:center;gap:8px;border:1px solid var(--border-strong);border-radius:20px;
+    padding:7px 14px 7px 10px;font-size:13px;font-weight:500;color:var(--ink-soft);
+    cursor:pointer;user-select:none;background:var(--surface);
+  }
+  .picker-chip input{accent-color:var(--teal);width:14px;height:14px;cursor:pointer;}
+  .picker-chip.active{background:var(--teal-tint);border-color:var(--teal);color:var(--teal);font-weight:600;}
+  .picker-chip .sub{opacity:.7;font-weight:400;}
+
+  /* ---- Explanation block ---- */
+  .explain-block{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:22px;overflow:hidden;}
+  .explain-toggle{
+    width:100%;display:flex;align-items:center;justify-content:space-between;
+    padding:14px 20px;background:none;border:none;cursor:pointer;
+    font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:var(--ink);text-align:left;
+  }
+  .explain-toggle:hover{background:var(--bg);}
+  .explain-caret{transition:transform .15s;color:var(--grey);font-size:13px;}
+  .explain-block.open .explain-caret{transform:rotate(180deg);}
+  .explain-body{max-height:0;overflow:hidden;transition:max-height .2s ease;padding:0 20px;}
+  .explain-block.open .explain-body{max-height:900px;padding:0 20px 18px;}
+  .explain-body p{font-size:13.5px;line-height:1.6;color:var(--ink-soft);margin:0 0 10px;}
+  .explain-body ul{margin:0 0 10px;padding-left:18px;}
+  .explain-body li{font-size:13.5px;line-height:1.6;color:var(--ink-soft);margin-bottom:4px;}
+  .explain-body strong{color:var(--ink);}
+
+  /* ---- Legend ---- */
+  .legend{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 22px;margin-bottom:22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:11px 18px;}
+  .legend-title{grid-column:1/-1;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:600;}
+  .legend-item{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ink-soft);}
+  .legend-item strong{color:var(--ink);font-weight:600;display:block;font-size:12px;}
+  .swatch{flex:0 0 auto;margin-top:1px;}
+  .icon{width:16px;height:16px;display:block;}
+  .chip{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:20px;white-space:nowrap;display:inline-block;}
+  .chip.addon{background:var(--teal-tint);color:var(--teal);border:1px solid #BFDED6;}
+  .chip.supported{background:var(--green-tint);color:var(--green);border:1px solid #BFE3D0;font-weight:600;}
+  .chip.na{background:var(--grey-tint);color:var(--grey);border:1px solid #DCDEDB;font-weight:500;}
+  .chip.star{background:var(--amber-tint);color:var(--amber);border:1px solid #E9CE9E;}
+
+  /* ---- Table ---- */
+  .table-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+  .table-scroll{overflow-x:auto;}
+  table{border-collapse:separate;border-spacing:0;width:100%;min-width:640px;}
+
+  .col-group{position:sticky;left:0;z-index:3;background:var(--grey-tint);min-width:148px;max-width:148px;border-right:1px solid var(--border);vertical-align:middle;}
+  .col-sub{position:sticky;left:148px;z-index:3;background:var(--surface);min-width:210px;max-width:210px;border-right:2px solid var(--border-heavy);}
+  thead .col-group, thead .col-sub{z-index:4;}
+
+  thead th{position:sticky;top:0;z-index:2;background:var(--surface);text-align:left;padding:0;border-bottom:1px solid var(--border-strong);}
+  .pkg-head{padding:14px 18px;min-width:150px;}
+  .pkg-head .bar{height:4px;width:100%;border-radius:3px;margin-bottom:10px;}
+  .pkg-head .competitor{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);font-weight:600;margin-bottom:3px;}
+  .pkg-head .package{font-weight:700;font-size:14.5px;color:var(--ink);}
+
+  tbody td{padding:12px 18px;font-size:13.5px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+
+  td.col-group{font-weight:700;color:var(--ink);font-size:12.5px;letter-spacing:.01em;}
+  td.col-sub{font-weight:500;color:var(--ink-soft);font-size:13.5px;background:var(--surface);}
+  td.col-sub.leaf{color:var(--grey);font-style:italic;}
+
+  /* Major divider between the "Package" part and the "Feature" part */
+  tr.part-row td{background:var(--ink);color:#fff;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;padding:11px 18px;}
+  tr.part-row td.col-group, tr.part-row td.col-sub, tr.part-row td.pkg-col{background:var(--ink);}
+  tr.part-row:not(:first-child) td{border-top:3px solid var(--bg);}
+
+  td.pkg-col, th.pkg-head{border-right:2px solid var(--border-heavy);}
+  td.pkg-col.even, th.pkg-head.even{background:var(--col-even);}
+
+  /* DISH column stays visible while scrolling right, anchored right after the two label columns */
+  .dish-frozen{position:sticky;z-index:2;width:180px;min-width:180px;max-width:180px;}
+  thead th.dish-frozen{z-index:5;background:var(--surface);}
+  td.dish-frozen{background:var(--teal-tint);}
+  tr.part-row td.dish-frozen{background:var(--ink);}
+  .dish-frozen.frozen-end{box-shadow:6px 0 10px -6px rgba(20,20,20,.18);}
+
+  .price-main{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14.5px;}
+  .price-sub{display:block;font-family:'Inter',sans-serif;font-weight:400;font-size:11px;color:var(--grey);margin-top:3px;}
+  .term-note{display:block;font-family:'Inter',sans-serif;font-weight:400;font-size:11px;color:var(--grey);margin-top:2px;}
+  .billing{font-family:'Inter',sans-serif;font-weight:500;font-size:12px;color:var(--ink-soft);}
+  .hw-note{font-size:12.5px;color:var(--ink-soft);line-height:1.4;display:block;}
+
+  .foot-note{margin-top:20px;display:flex;gap:10px;align-items:flex-start;font-size:12px;color:var(--grey);line-height:1.5;}
+  .foot-note svg{flex:0 0 auto;margin-top:2px;}
+
+  @media (max-width:640px){ body{padding:22px 14px 60px;} .legend{grid-template-columns:1fr 1fr;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Internal tool — POS benchmark</div>
+  <h1>POS Feature &amp; Pricing Benchmark</h1>
+  <p class="subtitle">Pick a country, then the competitors you want, then the specific packages to line up. Each selected package becomes one column. Rows are split into <strong>Package</strong> (cost) and <strong>Feature</strong> (capability), with each feature's sub-items grouped beneath it.</p>
+
+  <div class="explain-block" id="explainBlock">
+    <button type="button" class="explain-toggle" id="explainToggle">
+      <span>How this benchmark works</span><span class="explain-caret">▾</span>
+    </button>
+    <div class="explain-body">
+      <p><strong>Package vs. Feature.</strong> Every column is split into two parts: <strong>Package</strong> covers cost (TCO for the first year, the recurring subscription fee, and what hardware is included), and <strong>Feature</strong> covers capability — what each package can actually do.</p>
+      <p><strong>DISH is always shown first</strong> and stays pinned to the left edge even when you scroll right, so it's always there to compare against.</p>
+      <p><strong>Bundled vs. Modular competitors.</strong> Most competitors offer a small number of fixed packages — pick as many as you want to compare. A few (like Square) let you choose hardware and software independently; for those, pick any hardware tier and any software tier, and every combination becomes its own column.</p>
+      <p><strong>TCO (1st year)</strong> for a bundled package is read directly from the sheet. For a modular combination, it's calculated as hardware price + first-year subscription cost, correctly annualized depending on whether the subscription is billed monthly or yearly.</p>
+      <ul>
+        <li><strong>Included</strong> — part of the package at no extra cost.</li>
+        <li><strong>Included, limited</strong> — included, but only a basic version.</li>
+        <li><strong>Not available</strong> — this competitor doesn't offer it.</li>
+        <li><strong>Add-on</strong> — available for an extra fee.</li>
+        <li><strong>Supported</strong> — confirmed available, but we don't yet know if it's included at no cost or an add-on.</li>
+        <li><strong>n/a</strong> — not yet researched.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="banner" id="dataBanner">Showing sample placeholder data — add your <code>data.xlsx</code> file next to this page on GitHub to see your real data.</div>
+
+  <div class="filters">
+    <div class="filter-row">
+      <div class="filter-label">Country</div>
+      <select id="countrySelect"></select>
+    </div>
+    <div class="filter-row">
+      <div class="filter-label">Competitors <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--grey);">— DISH is always included</span></div>
+      <div class="ms-dropdown" id="competitorDropdown">
+        <button type="button" class="ms-trigger" id="competitorTrigger">Select competitors ▾</button>
+        <div class="ms-panel" id="competitorPanel"></div>
+      </div>
+    </div>
+    <div class="filter-row">
+      <div class="filter-label">Packages <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--grey);">— one dropdown per competitor, pick as many as you want</span></div>
+      <div id="packageSelectionArea"></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-title">How to read a cell</div>
+    <div class="legend-item"><span class="swatch" id="legendCheck"></span><span><strong>Included</strong>Part of this package.</span></div>
+    <div class="legend-item"><span class="swatch" id="legendX"></span><span><strong>Not available</strong>No such offering.</span></div>
+    <div class="legend-item"><span class="swatch" id="legendCheckStar"></span><span><strong>Included, limited</strong>Present but not user-friendly.</span></div>
+    <div class="legend-item"><span class="swatch"><span class="chip addon">€ 12.90/month</span></span><span><strong>Paid add-on</strong>Extra cost to enable.</span></div>
+    <div class="legend-item"><span class="swatch"><span class="chip supported">supported</span></span><span><strong>Supported</strong>Available, but not sure if it's included or an add-on.</span></div>
+    <div class="legend-item"><span class="swatch"><span class="chip na">n/a</span></span><span><strong>No info found</strong>Not yet researched.</span></div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-scroll">
+      <table id="benchTable"></table>
+    </div>
+  </div>
+
+  <div class="foot-note">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" stroke="#8B9096" stroke-width="1.3"/><path d="M8 7.2V11.5" stroke="#8B9096" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="4.9" r="0.9" fill="#8B9096"/></svg>
+    <span>TCO (1st year) = first-year total cost of ownership. Hardware/installation cost is shown separately in grey when known. Comments, sources and last-updated dates from the sheet are kept in the data but not shown in this view.</span>
+  </div>
+
+</div>
+
+<script>
+/* =========================================================================
+   DATA LOADING
+   Expects an Excel file named "data.xlsx" in the SAME folder as this page,
+   first sheet, row 1 = header (ignored), and columns in this exact order:
+   A Competitor | B Country | C Product category | D Package/Tier name
+   E Package Structure ('Bundled' or 'Modular')
+   F Features/Cost Components | G Sub-feature | H Offering Type
+     ('Package', 'Feature', 'Hardware Tier', or 'Software Tier')
+   I Term | J Billing Period | K Price | L Comments | M Last Updated
+   N Source | O Link
+
+   BUNDLED competitors (one fixed package, like DISH): use H='Package' rows
+   for cost (D = package name) and H='Feature' rows (D = feature name,
+   G = sub-feature) — same as before.
+
+   MODULAR competitors (like Square: pick hardware + software separately):
+   - H='Hardware Tier' rows (D = hardware tier name): the row with
+     F='First Year Cost' AND G='Hardware' or G='Hardware + Installation' gives
+     the hardware price — and its Comments cell (with an "Included: ... ."
+     marker) describes what's in the box.
+   - H='Software Tier' rows (D = software tier name): the row with
+     F='Subscription Fee' AND G empty gives the software's recurring fee.
+   - TCO (1st year) = hardware price + (software subscription fee, annualized:
+     ×12 if billed monthly, used as-is if billed yearly).
+   - H='Feature' rows for a modular competitor use D = the SOFTWARE tier name
+     they belong to (features are tied to the software tier only).
+   ========================================================================= */
+const COLS = ['competitor','country','category','package','structure','featureCost','subfeature',
+              'offeringType','term','billing','price','comments','lastUpdated','source','link'];
+
+const SAMPLE_DATA = [
+  // --- DISH / Germany / Starter ---
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'First Year Cost',subfeature:'First Year Cost',offeringType:'Package',term:'n/a',billing:'one-time',price:'149.00',comments:'Included: 1x tablet terminal, hardware & installation €60.00. Standard delivery 5-7 days.'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Subscription Fee',subfeature:'',offeringType:'Package',term:'12 months',billing:'month',price:'39.00',comments:''},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'Integrated card payment',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'Split & partial payments',offeringType:'Feature',term:'',billing:'',price:'Supported'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'QR self-pay at table',offeringType:'Feature',term:'',billing:'month',price:'Add-on: 12,90€'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Reservation & Waitlist',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Not Available'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Loyalty Program',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Included*'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Reporting',subfeature:'Accounting Export',offeringType:'Feature',term:'',billing:'',price:'n/a'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Integrations',subfeature:'',offeringType:'Feature',term:'',billing:'month',price:'Add-on: 9,90€',comments:'Available: SAP, DATEV, and Lightspeed integrations. Setup required within 30 days.'},
+  {competitor:'DISH',country:'Germany',category:'POS',package:'Starter',featureCost:'Other',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Supported',comments:'24/7 phone support included. Onboarding call scheduled within 48 hours of signup.'},
+
+  // --- Gastrofix / Germany / Starter ---
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'First Year Cost',subfeature:'First Year Cost',offeringType:'Package',term:'n/a',billing:'one-time',price:'99.00',comments:'No hardware bundled, BYO device'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Subscription Fee',subfeature:'',offeringType:'Package',term:'n/a',billing:'month',price:'45.00',comments:''},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'Integrated card payment',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'Split & partial payments',offeringType:'Feature',term:'',billing:'',price:'Included*'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Payments',subfeature:'QR self-pay at table',offeringType:'Feature',term:'',billing:'',price:'Add-on'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Reservation & Waitlist',subfeature:'',offeringType:'Feature',term:'',billing:'one-time',price:'Add-on: min. 14,50€'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Loyalty Program',subfeature:'',offeringType:'Feature',term:'',billing:'month',price:'Add-on: 19,00€'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Reporting',subfeature:'Accounting Export',offeringType:'Feature',term:'',billing:'',price:'Supported'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Integrations',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Other',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'n/a'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Starter',featureCost:'Table Management',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Not Available'},
+
+  // --- Gastrofix / Germany / Pro — second package, to demonstrate cross-package availability ---
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Pro',featureCost:'First Year Cost',subfeature:'First Year Cost',offeringType:'Package',term:'n/a',billing:'one-time',price:'179.00',comments:'Included: terminal + printer bundle, €70.00.'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Pro',featureCost:'Subscription Fee',subfeature:'',offeringType:'Package',term:'n/a',billing:'month',price:'75.00'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Pro',featureCost:'Table Management',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Pro',featureCost:'Integrations',subfeature:'',offeringType:'Feature',term:'',billing:'month',price:'Add-on: 14,90€',comments:'Available: QuickBooks, Xero, and DATEV Accounting Export. Requires Pro subscription.'},
+  {competitor:'Gastrofix',country:'Germany',category:'POS',package:'Pro',featureCost:'Other',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Included',comments:'Dedicated account manager included for Pro customers.'},
+
+  // --- Lightspeed / Austria / Pro ---
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'First Year Cost',subfeature:'First Year Cost',offeringType:'Package',term:'n/a',billing:'one-time',price:'199.00',comments:'Included: hardware kit (terminal + printer), €120,00. Billed at checkout.'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Subscription Fee',subfeature:'',offeringType:'Package',term:'24 months',billing:'year',price:'690.00',comments:''},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Payments',subfeature:'Integrated card payment',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Payments',subfeature:'Split & partial payments',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Payments',subfeature:'QR self-pay at table',offeringType:'Feature',term:'',billing:'',price:'Not Available'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Reservation & Waitlist',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Loyalty Program',subfeature:'',offeringType:'Feature',term:'',billing:'month',price:'Add-on: from 24,00€'},
+  {competitor:'Lightspeed',country:'Austria',category:'POS',package:'Pro',featureCost:'Reporting',subfeature:'Accounting Export',offeringType:'Feature',term:'',billing:'',price:'n/a'},
+
+  // --- Square / Spain — MODULAR: hardware tiers and software tiers picked independently ---
+  // Hardware tiers: price row has F='First Year Cost', G='Hardware' or 'Hardware + Installation'
+  {competitor:'Square',country:'Spain',category:'POS',package:'Square Stand',structure:'Modular',featureCost:'First Year Cost',subfeature:'Hardware',offeringType:'Hardware Tier',term:'n/a',billing:'one-time',price:'49.00',comments:'Included: iPad stand + card reader, €49.00. Ships in 3-5 days.'},
+  {competitor:'Square',country:'Spain',category:'POS',package:'Square Terminal',structure:'Modular',featureCost:'First Year Cost',subfeature:'Hardware + Installation',offeringType:'Hardware Tier',term:'n/a',billing:'one-time',price:'149.00',comments:'Included: all-in-one terminal + built-in printer, €149.00.'},
+  {competitor:'Square',country:'Spain',category:'POS',package:'Square Terminal Rental',structure:'Modular',featureCost:'First Year Cost',subfeature:'Hardware + Installation',offeringType:'Hardware Tier',term:'24 months',billing:'month',price:'15.00',comments:'Included: all-in-one terminal, rented monthly, €15.00/month, no upfront cost.'},
+  // Software tiers: only need a Subscription Fee row — TCO annualizes this automatically
+  {competitor:'Square',country:'Spain',category:'POS',package:'Free',structure:'Modular',featureCost:'Subscription Fee',subfeature:'',offeringType:'Software Tier',term:'n/a',billing:'month',price:'0.00'},
+  {competitor:'Square',country:'Spain',category:'POS',package:'Free',structure:'Modular',featureCost:'Payments',subfeature:'Integrated card payment',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Square',country:'Spain',category:'POS',package:'Free',structure:'Modular',featureCost:'Payments',subfeature:'Split & partial payments',offeringType:'Feature',term:'',billing:'',price:'Not Available'},
+  {competitor:'Square',country:'Spain',category:'POS',package:'Free',structure:'Modular',featureCost:'Loyalty Program',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Not Available'},
+  {competitor:'Square',country:'Spain',category:'POS',package:'Plus',structure:'Modular',featureCost:'Subscription Fee',subfeature:'',offeringType:'Software Tier',term:'12 months',billing:'month',price:'59.00'},
+  {competitor:'Square',country:'Spain',category:'POS',package:'Plus',structure:'Modular',featureCost:'Payments',subfeature:'Integrated card payment',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Square',country:'Spain',category:'POS',package:'Plus',structure:'Modular',featureCost:'Payments',subfeature:'Split & partial payments',offeringType:'Feature',term:'',billing:'',price:'Included'},
+  {competitor:'Square',country:'Spain',category:'POS',package:'Plus',structure:'Modular',featureCost:'Loyalty Program',subfeature:'',offeringType:'Feature',term:'',billing:'',price:'Add-on: 19,00€'},
+];
+
+let DATA = [];
+
+async function loadData(){
+  try{
+    const res = await fetch('data.xlsx');
+    if(!res.ok) throw new Error('no file');
+    const buf = await res.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, {header:1});
+    DATA = rows.slice(1) // skip header row
+      .filter(r => r && r.length && r[0])
+      .map(r => {
+        const o = {};
+        COLS.forEach((key, i) => { o[key] = (r[i] !== undefined && r[i] !== null) ? String(r[i]).trim() : ''; });
+        return o;
+      });
+    if(DATA.length === 0) throw new Error('empty');
+  }catch(e){
+    DATA = SAMPLE_DATA;
+    document.getElementById('dataBanner').classList.add('show');
+  }
+  init();
+}
+
+/* ========================= ICONS ========================= */
+const ICON_CHECK = `<svg class="icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="10" cy="10" r="10" fill="#1B8A5A"/>
+  <path d="M6 10.3L8.7 13L14 7.3" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+const ICON_X = `<svg class="icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="10" cy="10" r="10" fill="#C94A3D"/>
+  <path d="M7 7L13 13M13 7L7 13" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+</svg>`;
+// Same silhouette as ICON_CHECK (so it still reads as "a version of Included"), but amber
+// instead of green, plus an explicit asterisk mark — distinguishable by shape AND color,
+// not color alone.
+const ICON_CHECK_STAR = `<span style="position:relative;display:inline-flex;">
+  <svg class="icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="10" r="10" fill="#B4791F"/>
+    <path d="M6 10.3L8.7 13L14 7.3" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span style="position:absolute;top:-5px;right:-6px;font-size:13px;font-weight:800;color:#B4791F;line-height:1;">*</span>
+</span>`;
+
+/* ========================= HELPERS ========================= */
+function parseNumber(str){
+  if(!str) return null;
+  let s = String(str).replace(/[^\d.,-]/g,'');
+  if(s.includes(',') && s.includes('.')){ s = s.replace(/,/g,''); }
+  else if(s.includes(',')){ s = s.replace(',','.'); }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+function formatEuro(str){
+  const n = parseNumber(str);
+  return n === null ? null : '€ ' + n.toFixed(2);
+}
+function billingLabel(billing){
+  if(!billing) return '';
+  const b = billing.toLowerCase();
+  if(b.includes('one')) return '(one-time)';
+  if(b.includes('month')) return '/ month';
+  if(b.includes('year')) return '/ year';
+  return '/ ' + billing;
+}
+function termNote(term){
+  if(!term || term.toLowerCase() === 'n/a') return '';
+  return term;
+}
+
+// Converts a price to its annual contribution based on its billing period:
+// monthly -> ×12, yearly -> as-is, one-time/perpetual/anything else -> as-is
+// (a one-time purchase and an already-yearly figure both just get added directly).
+function annualize(priceStr, billing){
+  const n = parseNumber(priceStr);
+  if(n === null) return null;
+  const b = (billing || '').toLowerCase();
+  return b.includes('month') ? n * 12 : n;
+}
+
+// Primary rule: look for an explicit "Included: ... ." marker in the comment
+// and take everything between "Included:" and the next period — reliable
+// because it's a fixed convention, not a guess. This row is meant to describe
+// WHAT hardware is included (e.g. "1x tablet terminal"), not its price — TCO
+// already shows the combined cost elsewhere, so no price is extracted here.
+// Fallback (only used if no marker is present): guess based on a
+// hardware-related keyword — less reliable, flagged as such in the UI, kept
+// only so older comments that predate the convention still show something.
+function extractHardwareInfo(comment){
+  if(!comment || !comment.trim()) return null;
+  const text = comment.trim();
+
+  const markerMatch = text.match(/Included:\s*([\s\S]*?)(?:\.(?=\D|$)|$)/i);
+  if(markerMatch){
+    const segment = markerMatch[1].trim();
+    if(!segment) return null; // "Included:" present but empty — treat as no info, same as n/a
+    return { text: segment, confident: true };
+  }
+
+  const hasKeyword = /hardware|terminal|tablet|printer|device|install/i.test(text);
+  if(!hasKeyword) return null;
+  return { text, confident: false };
+}
+
+function extractAddonAmount(raw){
+  // Strip the "Add-on:" prefix first so its hyphen never reaches the number parser
+  let rest = raw.replace(/^add-on:?\s*/i, '').trim();
+  let prefix = '';
+  const prefixMatch = rest.match(/^(from|min\.|max\.)\s*/i);
+  if(prefixMatch){
+    prefix = prefixMatch[1].charAt(0).toUpperCase() + prefixMatch[1].slice(1) + ' ';
+    rest = rest.slice(prefixMatch[0].length);
+  }
+  const numMatch = rest.match(/(\d+(?:[.,]\d+)?)/);
+  if(!numMatch) return {prefix, amount:null};
+  const n = parseFloat(numMatch[1].replace(',', '.'));
+  return {prefix, amount: isNaN(n) ? null : '€ ' + n.toFixed(2)};
+}
+
+// Tight billing suffix for add-on prices, with no space before the slash: "€ 12.90/month".
+function billingSuffixTight(billing){
+  if(!billing) return '';
+  const b = billing.toLowerCase();
+  if(b.includes('month')) return '/month';
+  if(b.includes('year')) return '/year';
+  return '';
+}
+
+// For the "Integrations" row's detail line: extract the sentence starting with "Available:"
+// up to the next period, same decimal-safe termination logic as extractHardwareInfo.
+function extractAvailableNote(comment){
+  if(!comment || !comment.trim()) return null;
+  const m = comment.match(/Available:\s*([\s\S]*?)(?:\.(?=\D|$)|$)/i);
+  if(!m) return null;
+  const segment = m[1].trim();
+  return segment || null;
+}
+
+function renderStatus(row){
+  if(!row || !row.price) return `<span class="chip na">n/a</span>`;
+  const raw = row.price.trim();
+  const lower = raw.toLowerCase();
+  if(lower === 'included') return ICON_CHECK;
+  if(lower === 'included*') return ICON_CHECK_STAR;
+  if(lower === 'not available') return ICON_X;
+  if(lower === 'supported') return `<span class="chip supported">supported</span>`;
+  if(lower === 'n/a' || raw === '') return `<span class="chip na">n/a</span>`;
+  if(lower.startsWith('add-on')){
+    const {prefix, amount} = extractAddonAmount(raw);
+    if(amount === null) return `<span class="chip addon">Add-on</span>`;
+    return `<span class="chip addon">${prefix}${amount}${billingSuffixTight(row.billing)}</span>`;
+  }
+  return `<span class="chip na">${raw}</span>`;
+}
+
+/* ========================= STATE ========================= */
+let selectedCountry = null;
+let selectedCompetitors = new Set();
+let selectedPackages = new Set();           // keys: "competitor||package"   (bundled competitors)
+let selectedHW = new Map();                 // competitor -> Set of hardware tier names (modular competitors)
+let selectedSW = new Map();                 // competitor -> Set of software tier names (modular competitors)
+
+function uniq(arr){ return [...new Set(arr)]; }
+function isDish(name){ return !!name && name.trim().toLowerCase() === 'dish'; }
+
+function countriesList(){ return uniq(DATA.map(r=>r.country)).filter(Boolean); }
+function competitorsInCountry(country){ return uniq(DATA.filter(r=>r.country===country).map(r=>r.competitor)).filter(Boolean); }
+function packagesFor(country, competitor){ return uniq(DATA.filter(r=>r.country===country && r.competitor===competitor && r.offeringType==='Package').map(r=>r.package)).filter(Boolean); }
+// The other, user-pickable competitors — DISH is excluded here because it's always shown, unconditionally.
+function pickableCompetitors(country){ return competitorsInCountry(country).filter(c=>!isDish(c)); }
+
+// Checks EVERY row for this competitor+country (not just the first one found),
+// so one row forgetting to fill in column O doesn't misclassify the whole competitor.
+function competitorStructure(country, competitor){
+  const isModular = DATA.some(r => r.country===country && r.competitor===competitor && (r.structure||'').trim().toLowerCase()==='modular');
+  return isModular ? 'modular' : 'bundled';
+}
+function tiersFor(country, competitor, offeringType){
+  return uniq(DATA.filter(r=>r.country===country && r.competitor===competitor && r.offeringType===offeringType).map(r=>r.package)).filter(Boolean);
+}
+
+/* ========================= RENDER: FILTERS ========================= */
+// Country name -> ISO 3166-1 alpha-2 code, for turning a plain country name into a flag emoji.
+// Covers common HoReCa/POS markets; falls back to no flag for anything not listed.
+const COUNTRY_CODES = {
+  'germany':'DE','austria':'AT','switzerland':'CH','spain':'ES','portugal':'PT',
+  'france':'FR','italy':'IT','netherlands':'NL','belgium':'BE','luxembourg':'LU',
+  'united kingdom':'GB','uk':'GB','ireland':'IE','denmark':'DK','sweden':'SE',
+  'norway':'NO','finland':'FI','poland':'PL','czech republic':'CZ','czechia':'CZ',
+  'slovakia':'SK','hungary':'HU','romania':'RO','bulgaria':'BG','greece':'GR',
+  'croatia':'HR','slovenia':'SI','estonia':'EE','latvia':'LV','lithuania':'LT',
+  'iceland':'IS','malta':'MT','cyprus':'CY','united states':'US', 'usa':'US',
+  'canada':'CA','mexico':'MX','brazil':'BR','australia':'AU','new zealand':'NZ',
+  'japan':'JP','south korea':'KR','china':'CN','india':'IN','singapore':'SG',
+  'united arab emirates':'AE','uae':'AE','saudi arabia':'SA','turkey':'TR',
+  'south africa':'ZA'
+};
+function countryFlag(name){
+  const code = COUNTRY_CODES[(name||'').trim().toLowerCase()];
+  if(!code) return '';
+  return code.toUpperCase().replace(/./g, ch => String.fromCodePoint(127397 + ch.charCodeAt(0)));
+}
+
+function renderCountrySelect(){
+  const sel = document.getElementById('countrySelect');
+  const countries = countriesList();
+  sel.innerHTML = countries.map(c => {
+    const flag = countryFlag(c);
+    return `<option value="${c}">${flag ? flag + ' ' : ''}${c}</option>`;
+  }).join('');
+  if(!selectedCountry || !countries.includes(selectedCountry)) selectedCountry = countries[0];
+  sel.value = selectedCountry;
+  sel.onchange = () => {
+    selectedCountry = sel.value;
+    selectedCompetitors = new Set(pickableCompetitors(selectedCountry));
+    rebuildPackageSelectionFromCompetitors();
+    renderCompetitorChips();
+    renderPackageSelection();
+    renderTable();
+  };
+}
+
+function rebuildPackageSelectionFromCompetitors(){
+  const pkgs = new Set();
+  selectedHW = new Map();
+  selectedSW = new Map();
+  selectedCompetitors.forEach(comp => {
+    if(competitorStructure(selectedCountry, comp) === 'modular'){
+      selectedHW.set(comp, new Set(tiersFor(selectedCountry, comp, 'Hardware Tier')));
+      selectedSW.set(comp, new Set(tiersFor(selectedCountry, comp, 'Software Tier')));
+    } else {
+      packagesFor(selectedCountry, comp).forEach(p => pkgs.add(comp + '||' + p));
+    }
+  });
+  selectedPackages = pkgs;
+}
+
+function renderCompetitorChips(){
+  const trigger = document.getElementById('competitorTrigger');
+  const panel = document.getElementById('competitorPanel');
+  const competitors = pickableCompetitors(selectedCountry);
+
+  // Trigger label: name(s) if few are selected, a count if many, a placeholder if none.
+  const chosen = competitors.filter(c => selectedCompetitors.has(c));
+  if(competitors.length === 0){
+    trigger.textContent = 'No other competitors on file';
+  } else if(chosen.length === 0){
+    trigger.textContent = 'Select competitors ▾';
+  } else if(chosen.length <= 2){
+    trigger.textContent = chosen.join(', ') + ' ▾';
+  } else {
+    trigger.textContent = chosen.length + ' competitors selected ▾';
+  }
+
+  if(competitors.length === 0){
+    panel.innerHTML = `<div style="padding:8px;font-size:13px;color:var(--grey);">No other competitors on file for this country yet.</div>`;
+    return;
+  }
+
+  panel.innerHTML = competitors.map(c => {
+    const active = selectedCompetitors.has(c);
+    return `<label class="ms-option${active?' active':''}" data-c="${c}">
+      <input type="checkbox" ${active?'checked':''} data-c="${c}"> ${c}
+    </label>`;
+  }).join('');
+
+  panel.querySelectorAll('input[type="checkbox"]').forEach(inp=>{
+    inp.addEventListener('change', e=>{
+      const c = e.target.getAttribute('data-c');
+      if(e.target.checked){
+        selectedCompetitors.add(c);
+        if(competitorStructure(selectedCountry, c) === 'modular'){
+          selectedHW.set(c, new Set(tiersFor(selectedCountry, c, 'Hardware Tier')));
+          selectedSW.set(c, new Set(tiersFor(selectedCountry, c, 'Software Tier')));
+        } else {
+          packagesFor(selectedCountry, c).forEach(p => selectedPackages.add(c + '||' + p));
+        }
+      } else {
+        selectedCompetitors.delete(c);
+        selectedHW.delete(c);
+        selectedSW.delete(c);
+        packagesFor(selectedCountry, c).forEach(p => selectedPackages.delete(c + '||' + p));
+      }
+      renderCompetitorChips();
+      renderPackageSelection();
+      renderTable();
+    });
+  });
+}
+
+function setupCompetitorDropdown(){
+  const trigger = document.getElementById('competitorTrigger');
+  const panel = document.getElementById('competitorPanel');
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    panel.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if(!document.getElementById('competitorDropdown').contains(e.target)){
+      panel.classList.remove('open');
+    }
+  });
+}
+
+// Renders one section per selected competitor, each clearly labeled with the competitor's
+// name and a Bundled/Modular badge — so when several competitors are picked, it's always
+// obvious which packages (or hardware+software tiers) belong to which competitor.
+function pkgTriggerLabel(compName, chosenNames, totalCount){
+  if(totalCount === 0) return `${compName}: none on file`;
+  if(chosenNames.length === 0) return `${compName}: select ▾`;
+  if(chosenNames.length <= 2) return `${compName}: ${chosenNames.join(', ')} ▾`;
+  return `${compName}: ${chosenNames.length} selected ▾`;
+}
+
+function renderPackageSelection(){
+  const el = document.getElementById('packageSelectionArea');
+  const competitors = pickableCompetitors(selectedCountry).filter(c => selectedCompetitors.has(c));
+
+  if(competitors.length === 0){
+    el.innerHTML = `<span style="font-size:13px;color:var(--grey);">Select a competitor above first.</span>`;
+    return;
+  }
+
+  el.innerHTML = competitors.map(c => {
+    const structure = competitorStructure(selectedCountry, c);
+
+    if(structure === 'bundled'){
+      const pkgs = packagesFor(selectedCountry, c);
+      const chosen = pkgs.filter(p => selectedPackages.has(c + '||' + p));
+      const label = pkgTriggerLabel(c, chosen, pkgs.length);
+      const options = pkgs.map(p => {
+        const key = c + '||' + p;
+        const active = selectedPackages.has(key);
+        return `<label class="ms-option${active?' active':''}" data-k="${key}">
+          <input type="checkbox" ${active?'checked':''} data-k="${key}"> ${p}
+        </label>`;
+      }).join('') || `<div style="padding:8px;font-size:12.5px;color:var(--grey);">No packages on file.</div>`;
+      return `<div class="ms-dropdown">
+        <button type="button" class="ms-trigger pkg-trigger">${label}</button>
+        <div class="ms-panel">${options}</div>
+      </div>`;
+    }
+
+    const hwTiers = tiersFor(selectedCountry, c, 'Hardware Tier');
+    const swTiers = tiersFor(selectedCountry, c, 'Software Tier');
+    const hwSet = selectedHW.get(c) || new Set();
+    const swSet = selectedSW.get(c) || new Set();
+    const label = (hwTiers.length === 0 || swTiers.length === 0)
+      ? `${c}: none on file`
+      : `${c}: ${hwSet.size}×${swSet.size} combos ▾`;
+    const hwOptions = hwTiers.map(t => {
+      const active = hwSet.has(t);
+      return `<label class="ms-option${active?' active':''}" data-comp="${c}" data-kind="hw" data-tier="${t}">
+        <input type="checkbox" ${active?'checked':''} data-comp="${c}" data-kind="hw" data-tier="${t}"> ${t}
+      </label>`;
+    }).join('') || `<div style="padding:6px 8px;font-size:12px;color:var(--grey);">No hardware tiers.</div>`;
+    const swOptions = swTiers.map(t => {
+      const active = swSet.has(t);
+      return `<label class="ms-option${active?' active':''}" data-comp="${c}" data-kind="sw" data-tier="${t}">
+        <input type="checkbox" ${active?'checked':''} data-comp="${c}" data-kind="sw" data-tier="${t}"> ${t}
+      </label>`;
+    }).join('') || `<div style="padding:6px 8px;font-size:12px;color:var(--grey);">No software tiers.</div>`;
+    return `<div class="ms-dropdown">
+      <button type="button" class="ms-trigger pkg-trigger">${label}</button>
+      <div class="ms-panel" style="min-width:280px;">
+        <div class="modular-sub-label" style="margin-top:0;">Hardware tier</div>
+        ${hwOptions}
+        <div class="modular-sub-label">Software tier</div>
+        ${swOptions}
+      </div>
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('input[type="checkbox"][data-k]').forEach(inp=>{
+    inp.addEventListener('change', e=>{
+      const key = e.target.getAttribute('data-k');
+      if(e.target.checked) selectedPackages.add(key); else selectedPackages.delete(key);
+      renderPackageSelection();
+      renderTable();
+    });
+  });
+  el.querySelectorAll('input[type="checkbox"][data-kind]').forEach(inp=>{
+    inp.addEventListener('change', e=>{
+      const comp = e.target.getAttribute('data-comp');
+      const kind = e.target.getAttribute('data-kind');
+      const tier = e.target.getAttribute('data-tier');
+      const map = kind === 'hw' ? selectedHW : selectedSW;
+      if(!map.has(comp)) map.set(comp, new Set());
+      if(e.target.checked) map.get(comp).add(tier); else map.get(comp).delete(tier);
+      renderPackageSelection();
+      renderTable();
+    });
+  });
+}
+
+function setupExplainBlock(){
+  const block = document.getElementById('explainBlock');
+  document.getElementById('explainToggle').addEventListener('click', () => {
+    block.classList.toggle('open');
+  });
+}
+
+function setupPackageDropdowns(){
+  const container = document.getElementById('packageSelectionArea');
+  container.addEventListener('click', (e) => {
+    const trigger = e.target.closest('.pkg-trigger');
+    if(!trigger) return;
+    e.stopPropagation();
+    const panel = trigger.nextElementSibling;
+    container.querySelectorAll('.ms-panel.open').forEach(p => { if(p !== panel) p.classList.remove('open'); });
+    panel.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if(!container.contains(e.target)){
+      container.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+    }
+  });
+}
+
+/* ========================= RENDER: TABLE ========================= */
+const PALETTE = ['#B4791F','#6E4FA3','#2D6CA3','#A3444F','#3C8C55','#946E1F'];
+function colorForCompetitor(name, colorMap){
+  if(name.trim().toLowerCase() === 'dish') return '#0F6E5E';
+  if(!colorMap.has(name)) colorMap.set(name, PALETTE[colorMap.size % PALETTE.length]);
+  return colorMap.get(name);
+}
+
+function renderTable(){
+  const table = document.getElementById('benchTable');
+
+  // DISH is always shown first, with no selection required.
+  const dishRows = DATA.filter(r => r.country===selectedCountry && isDish(r.competitor));
+  const dishName = dishRows.length ? dishRows[0].competitor : 'DISH';
+  const dishCols = uniq(dishRows.map(r=>r.package)).map(p => ({key:'__DISH__||'+p, competitor:dishName, pkg:p}));
+
+  const pickedCols = [...selectedPackages].map(k=>{
+    const [competitor, pkg] = k.split('||');
+    return {key:k, competitor, pkg};
+  });
+
+  // Modular competitors: every checked hardware tier × every checked software tier = one column.
+  const modularCols = [];
+  selectedHW.forEach((hwSet, competitor)=>{
+    const swSet = selectedSW.get(competitor) || new Set();
+    hwSet.forEach(hw=>{
+      swSet.forEach(sw=>{
+        modularCols.push({key:competitor+'||HW:'+hw+'||SW:'+sw, competitor, hw, sw, isCombo:true, pkg: hw + ' + ' + sw});
+      });
+    });
+  });
+
+  const cols = [...dishCols, ...pickedCols, ...modularCols];
+
+  if(cols.length === 0){
+    table.innerHTML = `<tbody><tr><td style="padding:30px;color:var(--grey);font-size:13.5px;">Select at least one package, or a hardware + software combination, to see the comparison.</td></tr></tbody>`;
+    return;
+  }
+
+  const colorMap = new Map();
+  const dishColCount = dishCols.length;
+  const DISH_COL_WIDTH = 180;
+  const FROZEN_BASE = 358; // combined width of the col-group (148px) + col-sub (210px) sticky columns
+  // Returns the class + inline-style attributes for a package column, freezing it in place
+  // (right after the two label columns) if it belongs to DISH.
+  function pkgAttrs(baseClass, i){
+    let cls = baseClass + (i%2 ? ' even' : '');
+    let style = '';
+    if(i < dishColCount){
+      cls += ' dish-frozen';
+      if(i === dishColCount - 1) cls += ' frozen-end';
+      style = ` style="left:${FROZEN_BASE + i * DISH_COL_WIDTH}px;"`;
+    }
+    return `class="${cls}"${style}`;
+  }
+
+  // ---- header ----
+  let thead = `<thead><tr><th class="corner col-group"></th><th class="corner col-sub"></th>`;
+  cols.forEach((c,i)=>{
+    const color = colorForCompetitor(c.competitor, colorMap);
+    const pkgLabel = c.isCombo
+      ? `${c.hw} <span style="opacity:.55;font-weight:500;">+</span> ${c.sw}`
+      : c.pkg;
+    thead += `<th ${pkgAttrs('pkg-head', i)}>
+      <div class="bar" style="background:${color}"></div>
+      <div class="competitor">${c.competitor}</div>
+      <div class="package">${pkgLabel}</div>
+    </th>`;
+  });
+  thead += `</tr></thead>`;
+
+  // ---- rows data per column ----
+  // For modular combo columns, synthesize combined "Package"-type rows (summed TCO,
+  // summed Subscription Fee) so all the rendering logic below can treat every
+  // column the same way, regardless of whether it's bundled or modular.
+  function buildRowsForColumn(c){
+    if(!c.isCombo){
+      return DATA.filter(r => r.country===selectedCountry && r.competitor===c.competitor && r.package===c.pkg);
+    }
+    const hwRows = DATA.filter(r=>r.country===selectedCountry && r.competitor===c.competitor && r.package===c.hw && r.offeringType==='Hardware Tier');
+    const swRows = DATA.filter(r=>r.country===selectedCountry && r.competitor===c.competitor && r.package===c.sw && r.offeringType==='Software Tier');
+    const featureRows = DATA.filter(r=>r.country===selectedCountry && r.competitor===c.competitor && r.package===c.sw && r.offeringType==='Feature');
+
+    // Hardware price: the Hardware Tier row where Features/Cost Component = 'First Year Cost'
+    // and Sub-feature is either 'Hardware' or 'Hardware + Installation'. Same row supplies the
+    // "Included: ..." comment used for the Included Hardware line below.
+    // Billing Period on this row tells us whether it's a one-time purchase (Term = perpetual,
+    // Billing = one-time) or a rental (Billing = month/year) — treated the same way as the
+    // software subscription: monthly rental is annualized ×12, one-time or yearly is used as-is.
+    const hwPriceRow = hwRows.find(r=>r.featureCost==='First Year Cost' && (r.subfeature==='Hardware' || r.subfeature==='Hardware + Installation'));
+    const hwNum = hwPriceRow ? annualize(hwPriceRow.price, hwPriceRow.billing) : null;
+
+    // Software contributes to TCO via its Subscription Fee, annualized the same way.
+    const swSubRow = swRows.find(r=>r.featureCost==='Subscription Fee' && !r.subfeature);
+    const annualizedSwNum = swSubRow ? annualize(swSubRow.price, swSubRow.billing) : null;
+
+    const combinedTco = (hwNum===null && annualizedSwNum===null) ? null : (hwNum||0) + (annualizedSwNum||0);
+
+    const synthetic = [];
+    if(combinedTco !== null){
+      // comments AND billing come from the hardware price row — comments describe the hardware,
+      // billing tells the Included Hardware row whether to label it "(one-time)", "/ month", etc.
+      synthetic.push({offeringType:'Package', featureCost:'First Year Cost', subfeature:'First Year Cost', price:String(combinedTco), comments: hwPriceRow ? hwPriceRow.comments : '', billing: hwPriceRow ? hwPriceRow.billing : ''});
+    }
+    if(swSubRow){
+      // The visible Subscription Fee row shows the software tier's fee as entered (not annualized) — the
+      // annualized figure above is only used internally to compute TCO.
+      synthetic.push({offeringType:'Package', featureCost:'Subscription Fee', subfeature:'', price:swSubRow.price, billing:swSubRow.billing, term:swSubRow.term});
+    }
+    return [...synthetic, ...featureRows];
+  }
+
+  const rowsByCol = cols.map(buildRowsForColumn);
+  const emptyPkgCells = () => cols.map((c,i)=>`<td ${pkgAttrs('pkg-col', i)}></td>`).join('');
+
+  let body = `<tbody>`;
+
+  /* ---------------- PART 1: PACKAGE ---------------- */
+  body += `<tr class="part-row"><td colspan="2" class="col-group">Package</td>${emptyPkgCells()}</tr>`;
+
+  body += `<tr><td class="col-group" rowspan="3">Cost</td><td class="col-sub">TCO (1st year)</td>`;
+  rowsByCol.forEach((rows,i)=>{
+    const tco = rows.find(r=>r.offeringType==='Package' && r.featureCost==='First Year Cost' && r.subfeature==='First Year Cost');
+    const main = tco ? formatEuro(tco.price) : null;
+    body += `<td ${pkgAttrs('pkg-col', i)}>`;
+    body += main ? `<span class="price-main">${main}</span>` : `<span class="chip na">n/a</span>`;
+    body += `</td>`;
+  });
+  body += `</tr>`;
+
+  body += `<tr><td class="col-sub">Subscription fee</td>`;
+  rowsByCol.forEach((rows,i)=>{
+    const sub = rows.find(r=>r.offeringType==='Package' && r.featureCost==='Subscription Fee' && !r.subfeature);
+    body += `<td ${pkgAttrs('pkg-col', i)}>`;
+    if(sub && formatEuro(sub.price)){
+      body += `<span class="price-main">${formatEuro(sub.price)}</span> <span class="billing">${billingLabel(sub.billing)}</span>`;
+      const t = termNote(sub.term);
+      if(t) body += `<span class="term-note">${t} term</span>`;
+    } else {
+      body += `<span class="chip na">n/a</span>`;
+    }
+    body += `</td>`;
+  });
+  body += `</tr>`;
+
+  body += `<tr><td class="col-sub">Included hardware</td>`;
+  rowsByCol.forEach((rows,i)=>{
+    const tco = rows.find(r=>r.offeringType==='Package' && r.featureCost==='First Year Cost' && r.subfeature==='First Year Cost');
+    const hw = tco ? extractHardwareInfo(tco.comments) : null;
+    body += `<td ${pkgAttrs('pkg-col', i)}>`;
+    if(!hw){
+      body += `<span class="chip na">n/a</span>`;
+    } else {
+      body += `<span class="hw-note">${hw.text}${hw.confident ? '' : ' <span class="price-sub" style="display:inline">(unconfirmed match)</span>'}</span>`;
+    }
+    body += `</td>`;
+  });
+  body += `</tr>`;
+
+  /* ---------------- PART 2: FEATURE ---------------- */
+  body += `<tr class="part-row"><td colspan="2" class="col-group">Feature</td>${emptyPkgCells()}</tr>`;
+
+  // group by E (feature name) in first-seen order across all selected columns, with F as the sub-feature child
+  const groupOrderRaw = [];
+  const groupChildren = new Map(); // group -> ordered list of subfeature labels ('' allowed)
+  rowsByCol.flat().forEach(r=>{
+    if(r.offeringType !== 'Feature') return;
+    const g = r.featureCost;
+    if(!groupChildren.has(g)){ groupChildren.set(g, []); groupOrderRaw.push(g); }
+    const children = groupChildren.get(g);
+    if(!children.includes(r.subfeature)) children.push(r.subfeature);
+  });
+
+  // "Integrations" always sits second-to-last, "Other" always last, if either is present.
+  const groupOrder = groupOrderRaw.filter(g => g !== 'Integrations' && g !== 'Other');
+  if(groupOrderRaw.includes('Integrations')) groupOrder.push('Integrations');
+  if(groupOrderRaw.includes('Other')) groupOrder.push('Other');
+
+  groupOrder.forEach(g=>{
+    const children = groupChildren.get(g);
+    const isStandalone = children.length === 1 && children[0] === '';
+    const isSpecial = isStandalone && (g === 'Integrations' || g === 'Other');
+
+    if(isSpecial){
+      // Row 1: normal status, same as any other feature. Row 2: a detail line extracted from
+      // the Comments column — for Integrations, only when the status is Add-on (the sentence
+      // starting "Available:" up to the next period); for Other, the full comment whenever present.
+      const rowsForCol = rowsByCol.map(rows => rows.find(r=> r.offeringType==='Feature' && r.featureCost===g && (r.subfeature||'')===''));
+
+      body += `<tr><td class="col-group" rowspan="2">${g}</td><td class="col-sub leaf">—</td>`;
+      rowsForCol.forEach((row,i)=>{
+        body += `<td ${pkgAttrs('pkg-col', i)}>${renderStatus(row)}</td>`;
+      });
+      body += `</tr>`;
+
+      body += `<tr><td class="col-sub leaf" style="font-size:11.5px;">Details</td>`;
+      rowsForCol.forEach((row,i)=>{
+        let detail = null;
+        if(g === 'Integrations'){
+          const isAddon = row && (row.price || '').trim().toLowerCase().startsWith('add-on');
+          if(isAddon) detail = extractAvailableNote(row.comments);
+        } else {
+          detail = (row && row.comments && row.comments.trim()) ? row.comments.trim() : null;
+        }
+        body += `<td ${pkgAttrs('pkg-col', i)}>${detail ? `<span class="hw-note">${detail}</span>` : `<span class="chip na">—</span>`}</td>`;
+      });
+      body += `</tr>`;
+
+    } else if(isStandalone){
+      body += `<tr><td class="col-group">${g}</td><td class="col-sub leaf">—</td>`;
+      rowsByCol.forEach((rows,i)=>{
+        const row = rows.find(r=> r.offeringType==='Feature' && r.featureCost===g && (r.subfeature||'')==='');
+        body += `<td ${pkgAttrs('pkg-col', i)}>${renderStatus(row)}</td>`;
+      });
+      body += `</tr>`;
+    } else {
+      children.forEach((sub,idx)=>{
+        body += `<tr>`;
+        if(idx===0) body += `<td class="col-group" rowspan="${children.length}">${g}</td>`;
+        body += `<td class="col-sub">${sub || g}</td>`;
+        rowsByCol.forEach((rows,i)=>{
+          const row = rows.find(r=> r.offeringType==='Feature' && r.featureCost===g && (r.subfeature||'')===sub);
+          body += `<td ${pkgAttrs('pkg-col', i)}>${renderStatus(row)}</td>`;
+        });
+        body += `</tr>`;
+      });
+    }
+  });
+
+  body += `</tbody>`;
+  table.innerHTML = thead + body;
+}
+
+/* ========================= INIT ========================= */
+function init(){
+  document.getElementById('legendCheck').innerHTML = ICON_CHECK;
+  document.getElementById('legendX').innerHTML = ICON_X;
+  document.getElementById('legendCheckStar').innerHTML = ICON_CHECK_STAR;
+  const countries = countriesList();
+  selectedCountry = countries[0];
+  selectedCompetitors = new Set(pickableCompetitors(selectedCountry));
+  rebuildPackageSelectionFromCompetitors();
+  renderCountrySelect();
+  setupCompetitorDropdown();
+  setupPackageDropdowns();
+  setupExplainBlock();
+  renderCompetitorChips();
+  renderPackageSelection();
+  renderTable();
+}
+
+loadData();
+</script>
+</body>
+</html>
